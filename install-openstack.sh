@@ -28,7 +28,7 @@ export DEBIAN_FRONTEND=noninteractive
 echo "Starting installation of OpenStack Packages for Ubuntu"
 apt-get update
 apt-get install -y software-properties-common
-add-apt-repository -y cloud-archive:pike
+add-apt-repository -y cloud-archive:queens
 apt update -y && apt dist-upgrade -y
 apt install -y python-openstackclient
 
@@ -108,7 +108,10 @@ crudini --set /etc/keystone/keystone.conf token provider fernet
 su -s /bin/sh -c "keystone-manage db_sync" keystone
 keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
 keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
-keystone-manage bootstrap --bootstrap-password $ADMIN_PASS --bootstrap-admin-url http://$CONTROLLER_HOSTNAME:35357/v3/ --bootstrap-internal-url http://$CONTROLLER_HOSTNAME:5000/v3/ --bootstrap-public-url http://$CONTROLLER_HOSTNAME:5000/v3/ --bootstrap-region-id RegionOne
+keystone-manage bootstrap --bootstrap-password $ADMIN_PASS --bootstrap-admin-url http://$CONTROLLER_HOSTNAME:5000/v3/ --bootstrap-internal-url http://$CONTROLLER_HOSTNAME:5000/v3/ --bootstrap-public-url http://$CONTROLLER_HOSTNAME:5000/v3/ --bootstrap-region-id RegionOne
+
+echo "ServerName $CONTROLLER_HOSTNAME" >> /etc/apache2/apache2.conf
+service apache2 restart
 
 cat <<- EOF >> admin-openrc
 #! /bin/sh
@@ -117,7 +120,7 @@ export OS_PASSWORD=$ADMIN_PASS
 export OS_PROJECT_NAME=admin
 export OS_USER_DOMAIN_NAME=Default
 export OS_PROJECT_DOMAIN_NAME=Default
-export OS_AUTH_URL=http://$CONTROLLER_HOSTNAME:35357/v3
+export OS_AUTH_URL=http://$CONTROLLER_HOSTNAME:5000/v3
 export OS_IDENTITY_API_VERSION=3
 EOF
 chmod 644 admin-openrc
@@ -164,11 +167,11 @@ apt install -y glance
 
 crudini --set /etc/glance/glance-api.conf database connection mysql+pymysql://glance:$GLANCE_DBPASS@$CONTROLLER_HOSTNAME/glance
 crudini --set /etc/glance/glance-api.conf keystone_authtoken auth_uri http://$CONTROLLER_HOSTNAME:5000
-crudini --set /etc/glance/glance-api.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:35357
+crudini --set /etc/glance/glance-api.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:5000
 crudini --set /etc/glance/glance-api.conf keystone_authtoken memcached_servers $CONTROLLER_HOSTNAME:11211
 crudini --set /etc/glance/glance-api.conf keystone_authtoken auth_type password
-crudini --set /etc/glance/glance-api.conf keystone_authtoken project_domain_name default
-crudini --set /etc/glance/glance-api.conf keystone_authtoken user_domain_name default
+crudini --set /etc/glance/glance-api.conf keystone_authtoken project_domain_name Default
+crudini --set /etc/glance/glance-api.conf keystone_authtoken user_domain_name Default
 crudini --set /etc/glance/glance-api.conf keystone_authtoken project_name service
 crudini --set /etc/glance/glance-api.conf keystone_authtoken username glance
 crudini --set /etc/glance/glance-api.conf keystone_authtoken password $GLANCE_PASS
@@ -179,11 +182,11 @@ crudini --set /etc/glance/glance-api.conf glance_store filesystem_store_datadir 
 
 crudini --set /etc/glance/glance-registry.conf database connection mysql+pymysql://glance:$GLANCE_DBPASS@$CONTROLLER_HOSTNAME/glance
 crudini --set /etc/glance/glance-registry.conf keystone_authtoken auth_uri http://$CONTROLLER_HOSTNAME:5000
-crudini --set /etc/glance/glance-registry.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:35357
+crudini --set /etc/glance/glance-registry.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:5000
 crudini --set /etc/glance/glance-registry.conf keystone_authtoken memcached_servers $CONTROLLER_HOSTNAME:11211
 crudini --set /etc/glance/glance-registry.conf keystone_authtoken auth_type password
-crudini --set /etc/glance/glance-registry.conf keystone_authtoken project_domain_name default
-crudini --set /etc/glance/glance-registry.conf keystone_authtoken user_domain_name default
+crudini --set /etc/glance/glance-registry.conf keystone_authtoken project_domain_name Default
+crudini --set /etc/glance/glance-registry.conf keystone_authtoken user_domain_name Default
 crudini --set /etc/glance/glance-registry.conf keystone_authtoken project_name service
 crudini --set /etc/glance/glance-registry.conf keystone_authtoken username glance
 crudini --set /etc/glance/glance-registry.conf keystone_authtoken password $GLANCE_PASS
@@ -196,9 +199,9 @@ service glance-api restart
 
 # from Verify Operation https://docs.openstack.org/glance/pike/install/verify.html
 
-wget http://download.cirros-cloud.net/0.3.5/cirros-0.3.5-x86_64-disk.img
+wget http://download.cirros-cloud.net/0.4.0/cirros-0.4.0-x86_64-disk.img
 
-openstack image create "cirros" --file cirros-0.3.5-x86_64-disk.img --disk-format qcow2 --container-format bare --public
+openstack image create "cirros" --file cirros-0.4.0-x86_64-disk.img --disk-format qcow2 --container-format bare --public
 
 # from Install and configure controller node for Ubuntu https://docs.openstack.org/nova/pike/install/controller-install-ubuntu.html
 
@@ -237,8 +240,7 @@ crudini --set /etc/nova/nova.conf api_database connection mysql+pymysql://nova:$
 crudini --set /etc/nova/nova.conf database connection mysql+pymysql://nova:$NOVA_DBPASS@$CONTROLLER_HOSTNAME/nova
 crudini --set /etc/nova/nova.conf DEFAULT transport_url rabbit://openstack:$RABBIT_PASS@$CONTROLLER_HOSTNAME
 crudini --set /etc/nova/nova.conf api auth_strategy keystone
-crudini --set /etc/nova/nova.conf keystone_authtoken auth_uri http://$CONTROLLER_HOSTNAME:5000
-crudini --set /etc/nova/nova.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:35357
+crudini --set /etc/nova/nova.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:5000
 crudini --set /etc/nova/nova.conf keystone_authtoken memcached_servers $CONTROLLER_HOSTNAME:11211
 crudini --set /etc/nova/nova.conf keystone_authtoken auth_type password
 crudini --set /etc/nova/nova.conf keystone_authtoken project_domain_name default
@@ -260,7 +262,7 @@ crudini --set /etc/nova/nova.conf placement project_domain_name Default
 crudini --set /etc/nova/nova.conf placement project_name service
 crudini --set /etc/nova/nova.conf placement auth_type password
 crudini --set /etc/nova/nova.conf placement user_domain_name Default
-crudini --set /etc/nova/nova.conf placement auth_url http://$CONTROLLER_HOSTNAME:35357/v3
+crudini --set /etc/nova/nova.conf placement auth_url http://$CONTROLLER_HOSTNAME:5000/v3
 crudini --set /etc/nova/nova.conf placement username placement
 crudini --set /etc/nova/nova.conf placement password $PLACEMENT_PASS
 
@@ -285,8 +287,7 @@ apt install -y nova-compute
 
 crudini --set /etc/nova/nova.conf DEFAULT transport_url rabbit://openstack:$RABBIT_PASS@$CONTROLLER_HOSTNAME
 crudini --set /etc/nova/nova.conf api auth_strategy keystone
-crudini --set /etc/nova/nova.conf keystone_authtoken auth_uri http://$CONTROLLER_HOSTNAME:5000
-crudini --set /etc/nova/nova.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:35357
+crudini --set /etc/nova/nova.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:5000/v3
 crudini --set /etc/nova/nova.conf keystone_authtoken memcached_servers $CONTROLLER_HOSTNAME:11211
 crudini --set /etc/nova/nova.conf keystone_authtoken auth_type password
 crudini --set /etc/nova/nova.conf keystone_authtoken project_domain_name default
@@ -295,9 +296,9 @@ crudini --set /etc/nova/nova.conf keystone_authtoken project_name service
 crudini --set /etc/nova/nova.conf keystone_authtoken username nova
 crudini --set /etc/nova/nova.conf keystone_authtoken password $NOVA_PASS
 crudini --set /etc/nova/nova.conf DEFAULT my_ip $CONTROLLER_IP
-crudini --set /etc/nova/nova.conf DEFAULT use_neutron true
+crudini --set /etc/nova/nova.conf DEFAULT use_neutron True
 crudini --set /etc/nova/nova.conf DEFAULT firewall_driver nova.virt.firewall.NoopFirewallDriver
-crudini --set /etc/nova/nova.conf vnc enabled true
+crudini --set /etc/nova/nova.conf vnc enabled True
 crudini --set /etc/nova/nova.conf vnc vncserver_listen 0.0.0.0
 crudini --set /etc/nova/nova.conf vnc vncserver_proxyclient_address $CONTROLLER_IP
 crudini --set /etc/nova/nova.conf vnc novncproxy_base_url $NOVNCPROXY_BASE_URL
@@ -309,7 +310,7 @@ crudini --set /etc/nova/nova.conf placement project_domain_name Default
 crudini --set /etc/nova/nova.conf placement project_name service
 crudini --set /etc/nova/nova.conf placement auth_type password
 crudini --set /etc/nova/nova.conf placement user_domain_name Default
-crudini --set /etc/nova/nova.conf placement auth_url http://$CONTROLLER_HOSTNAME:35357/v3
+crudini --set /etc/nova/nova.conf placement auth_url http://$CONTROLLER_HOSTNAME:5000/v3
 crudini --set /etc/nova/nova.conf placement username placement
 crudini --set /etc/nova/nova.conf placement password $PLACEMENT_PASS
 
@@ -319,8 +320,8 @@ service nova-compute restart
 
 source admin-openrc
 su -s /bin/sh -c "nova-manage cell_v2 discover_hosts --verbose" nova
-echo "Executing openstack compute service list"
-openstack compute service list
+echo "Executing openstack compute service list --service nova-compute"
+openstack compute service list --service nova-compute
 echo "Executing nova-status upgrade check"
 nova-status upgrade check
 
@@ -352,7 +353,7 @@ crudini --set /etc/neutron/neutron.conf DEFAULT allow_overlapping_ips true
 crudini --set /etc/neutron/neutron.conf DEFAULT transport_url rabbit://openstack:$RABBIT_PASS@$CONTROLLER_HOSTNAME
 crudini --set /etc/neutron/neutron.conf DEFAULT auth_strategy keystone
 crudini --set /etc/neutron/neutron.conf keystone_authtoken auth_uri http://$CONTROLLER_HOSTNAME:5000
-crudini --set /etc/neutron/neutron.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:35357
+crudini --set /etc/neutron/neutron.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:5000
 crudini --set /etc/neutron/neutron.conf keystone_authtoken memcached_servers $CONTROLLER_HOSTNAME:11211
 crudini --set /etc/neutron/neutron.conf keystone_authtoken auth_type password
 crudini --set /etc/neutron/neutron.conf keystone_authtoken project_domain_name default
@@ -362,7 +363,7 @@ crudini --set /etc/neutron/neutron.conf keystone_authtoken username neutron
 crudini --set /etc/neutron/neutron.conf keystone_authtoken password $NEUTRON_PASS
 crudini --set /etc/neutron/neutron.conf DEFAULT notify_nova_on_port_status_changes true
 crudini --set /etc/neutron/neutron.conf DEFAULT notify_nova_on_port_data_changes true
-crudini --set /etc/neutron/neutron.conf nova auth_url http://$CONTROLLER_HOSTNAME:35357
+crudini --set /etc/neutron/neutron.conf nova auth_url http://$CONTROLLER_HOSTNAME:5000
 crudini --set /etc/neutron/neutron.conf nova auth_type password
 crudini --set /etc/neutron/neutron.conf nova project_domain_name default
 crudini --set /etc/neutron/neutron.conf nova user_domain_name default
@@ -370,6 +371,7 @@ crudini --set /etc/neutron/neutron.conf nova region_name RegionOne
 crudini --set /etc/neutron/neutron.conf nova project_name service
 crudini --set /etc/neutron/neutron.conf nova username nova
 crudini --set /etc/neutron/neutron.conf nova password $NOVA_PASS
+crudini --set /etc/neutron/neutron.confoslo_concurrency lock_path /var/lib/neutron/tmp
 
 crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2 type_drivers "flat,vlan,vxlan"
 crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2 tenant_network_types vxlan
@@ -396,7 +398,7 @@ crudini --set /etc/neutron/metadata_agent.ini DEFAULT nova_metadata_host $CONTRO
 crudini --set /etc/neutron/metadata_agent.ini DEFAULT metadata_proxy_shared_secret $METADATA_SECRET
 
 crudini --set /etc/nova/nova.conf neutron url http://$CONTROLLER_HOSTNAME:9696
-crudini --set /etc/nova/nova.conf neutron auth_url http://$CONTROLLER_HOSTNAME:35357
+crudini --set /etc/nova/nova.conf neutron auth_url http://$CONTROLLER_HOSTNAME:5000
 crudini --set /etc/nova/nova.conf neutron auth_type password
 crudini --set /etc/nova/nova.conf neutron project_domain_name default
 crudini --set /etc/nova/nova.conf neutron user_domain_name default
@@ -424,7 +426,7 @@ apt install -y neutron-linuxbridge-agent
 crudini --set /etc/neutron/neutron.conf DEFAULT transport_url rabbit://openstack:$RABBIT_PASS@$CONTROLLER_HOSTNAME
 crudini --set /etc/neutron/neutron.conf DEFAULT auth_strategy keystone
 crudini --set /etc/neutron/neutron.conf keystone_authtoken auth_uri http://$CONTROLLER_HOSTNAME:5000
-crudini --set /etc/neutron/neutron.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:35357
+crudini --set /etc/neutron/neutron.conf keystone_authtoken auth_url http://$CONTROLLER_HOSTNAME:5000
 crudini --set /etc/neutron/neutron.conf keystone_authtoken memcached_servers $CONTROLLER_HOSTNAME:11211
 crudini --set /etc/neutron/neutron.conf keystone_authtoken auth_type password
 crudini --set /etc/neutron/neutron.conf keystone_authtoken project_domain_name default

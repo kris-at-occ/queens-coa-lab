@@ -21,10 +21,11 @@ Vagrant.configure("2") do |config|
       node.vm.hostname = machine[:hostname]
       node.vm.network "forwarded_port", guest: 80, host: 8080
       node.vm.network "forwarded_port", guest: 6080, host: 6080
+      node.vm.network "private_network", ip: "10.0.0.11"
       node.vm.provider "virtualbox" do |vb|
 #        vb.gui = true
         vb.customize ["modifyvm", :id, "--memory", machine[:ram], "--cpus", machine[:cpu]]
-        vb.customize ["modifyvm", :id, "--nic2", "natnetwork", "--nat-network2", "ProviderNetwork", "--nicpromisc2", "allow-all"]
+        vb.customize ["modifyvm", :id, "--nic3", "natnetwork", "--nat-network3", "ProviderNetwork", "--nicpromisc3", "allow-all"]
         controller_name = 'SCSI'
         file_to_disk = File.realpath( "." ).to_s + '/openstack_data.vdi'
         vb.customize ['createhd', '--filename', file_to_disk, '--size', 50 * 1024, '--format', 'VDI']
